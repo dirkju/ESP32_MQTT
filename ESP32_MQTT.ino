@@ -67,6 +67,8 @@ void messageReceived(String &topic, String &payload) {
 
 void setup() {
   Serial.begin(115200);
+  Serial.print("This devices MAC address is ");
+  Serial.println(WiFi.macAddress());
   scanWifi();
   WiFi.begin(ssid, pass);
 
