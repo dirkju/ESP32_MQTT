@@ -17,7 +17,7 @@ MQTTClient client;
 unsigned long lastMillis = 0;
 unsigned long numMessages = 0;
 
-void connect() {
+void connectWifi() {
   Serial.print("checking wifi...");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -58,6 +58,16 @@ void scanWifi() {
   Serial.println("");  
 }
 
+void beginWifi(const char ssid[], const char password[]) {
+  if(strlen(password) > 0) {
+    Serial.println("Connecting with PSK");
+    WiFi.begin(ssid, password);
+  } else {
+    Serial.println("Connecting without PSK");
+    WiFi.begin(ssid);    
+  }
+}
+
 void messageReceived(String &topic, String &payload) {
   numMessages++;
   Serial.print("incoming: ");
@@ -70,7 +80,7 @@ void setup() {
   Serial.print("This devices MAC address is ");
   Serial.println(WiFi.macAddress());
   scanWifi();
-  WiFi.begin(ssid, pass);
+  beginWifi(ssid, pass);
 
   // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported by Arduino.
   // You need to set the IP address directly.
@@ -79,7 +89,7 @@ void setup() {
   client.begin("broker.shiftr.io", 8883, net);
   client.onMessage(messageReceived);
 
-  connect();
+  connectWifi();
 }
 
 void loop() {
@@ -87,11 +97,11 @@ void loop() {
   delay(10);  // <- fixes some issues with WiFi stability
 
   if (!client.connected()) {
-    connect();
+    connectWifi();
   }
 
   // publish a message roughly every second.
-  if (millis() - lastMillis > 1000) {
+  if (millis() - lastMillis > 5000) {
     lastMillis = millis();
     client.publish("/hello", "world");
   }
