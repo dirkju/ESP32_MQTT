@@ -3,38 +3,29 @@
 //
 // You can check on your device after a successful
 // connection here: https://shiftr.io/try.
-//
-// by Joël Gähwiler
-// https://github.com/256dpi/arduino-mqtt
 
+// Libraries
 #include <WiFiClientSecure.h>
-#include <MQTT.h>
+#include <PubSubClient.h> // PubSubClient
+#include <PubSubClientTools.h> // PubSubClientTools dersimn
+#include <Thread.h> // ArduinoThread Ivan Seidel
+#include <ThreadController.h>
+
 #include "ConnectionConfiguration.h"
 
+#define MQTT_SERVER "broker.shiftr.io"
+
 WiFiClientSecure net;
-MQTTClient client;
+PubSubClient client(MQTT_SERVER, 1883, net); // see https://docs.shiftr.io/interfaces/mqtt/
+PubSubClientTools mqtt(client);
+
+ThreadController threadControl = ThreadController();
+Thread thread = Thread();
 
 unsigned long lastMillis = 0;
 unsigned long numMessages = 0;
-
-void connectWifi() {
-  Serial.print("checking wifi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.print("\nconnecting...");
-  while (!client.connect("arduino", "try", "try")) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.println("\nconnected!");
-
-  client.subscribe("/hello");
-  // client.unsubscribe("/hello");
-}
+int value = 0;
+const String s = "";
 
 void scanWifi() {
   int n = WiFi.scanNetworks();
@@ -58,38 +49,74 @@ void scanWifi() {
   Serial.println("");  
 }
 
-void beginWifi(const char ssid[], const char password[]) {
+void connectWifi(const char ssid[], const char password[]) {
   if(strlen(password) > 0) {
-    Serial.println("Connecting with PSK");
+    Serial.println("Wifi: Using PSK");
     WiFi.begin(ssid, password);
   } else {
-    Serial.println("Connecting without PSK");
+    Serial.println("Wifi: Not using PSK (open Wifi)");
     WiFi.begin(ssid);    
   }
+
+  Serial.print("Wifi: polling for connection");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(1000);
+  }
+  Serial.println("\nWifi: connected!");
 }
 
-void messageReceived(String &topic, String &payload) {
+/** void messageReceived(String &topic, String &payload) {
   numMessages++;
   Serial.print("incoming: ");
   Serial.print(numMessages);
   Serial.println(" " + topic + " - " + payload);
+} **/
+
+void publisher() {
+  ++value;
+  mqtt.publish("test_out/hello_world", s+"Hello World! - No. "+value);
+}
+
+void topic1_subscriber(String topic, String message) {
+  Serial.println(s+"Message arrived in function 1 ["+topic+"] "+message);
+}
+
+void topic2_subscriber(String topic, String message) {
+  Serial.println(s+"Message arrived in function 2 ["+topic+"] "+message);
+}
+
+void topic3_subscriber(String topic, String message) {
+  Serial.println(s+"Message arrived in function 3 ["+topic+"] "+message);
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.print("This devices MAC address is ");
   Serial.println(WiFi.macAddress());
+  Serial.println("Wifi: Scanning networks");
   scanWifi();
-  beginWifi(ssid, pass);
+  connectWifi(ssid, pass);
 
-  // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported by Arduino.
-  // You need to set the IP address directly.
-  //
-  // MQTT brokers usually use port 8883 for secure connections.
-  client.begin("broker.shiftr.io", 8883, net);
-  client.onMessage(messageReceived);
+  // Connect to MQTT
+  Serial.println("MQTT: "+s+"Connecting to: "+MQTT_SERVER+" ... ");
+  if (client.connect("ESP32arduino", "try", "try")) {
+//  if (client.connect("ESP32Client01", mqtt_user, mqtt_pass)) {
+    Serial.println("MQTT: connected");
+    mqtt.subscribe("test_in/foo/bar",  topic1_subscriber);
+    mqtt.subscribe("test_in/+/bar",    topic2_subscriber);
+    mqtt.subscribe("test_in/#",        topic3_subscriber);
+  } else {
+    Serial.println("MQTT: " + s + "failed, Client.state = "+client.state());
+    delay(5000);
+    // error out
+    return;
+  }
 
-  connectWifi();
+  // Enable Thread
+  thread.onRun(publisher);
+  thread.setInterval(2000);
+  threadControl.add(&thread);
 }
 
 void loop() {
@@ -97,12 +124,10 @@ void loop() {
   delay(10);  // <- fixes some issues with WiFi stability
 
   if (!client.connected()) {
-    connectWifi();
+    Serial.println("MQTT: not connected.");
+    delay(10000);
+    return;
   }
 
-  // publish a message roughly every second.
-  if (millis() - lastMillis > 5000) {
-    lastMillis = millis();
-    client.publish("/hello", "world");
-  }
+  threadControl.run();
 }
