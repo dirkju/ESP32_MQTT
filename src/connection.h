@@ -16,7 +16,7 @@ void connect_client(const char* scopeId, const char* deviceId,
     return;
   }
 
-  iotc_set_logging(IOTC_LOGGING_API_ONLY);
+  iotc_set_logging(IOTC_LOGGING_ALL);
 
   // set up event callbacks. they are all declared under the ESP8266.ino file
   // for simplicity, track all of them from the same callback function

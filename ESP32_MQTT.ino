@@ -1,20 +1,15 @@
 // This example uses an ESP32 Development Board
-// to connect to shiftr.io.
+// to connect to Azure IOT Hub
 //
-// You can check on your device after a successful
-// connection here: https://shiftr.io/try.
 
 // Libraries
 #include <WiFiClientSecure.h>
-#include "src/iotc/common/string_buffer.h"
-#include "src/iotc/iotc.h"
 #include <PubSubClient.h> // PubSubClient http://knolleary.net
 #include <PubSubClientTools.h> // PubSubClientTools dersimn
+#include "src/iotc/common/string_buffer.h"
+#include "src/iotc/iotc.h"
 
 #include "ConnectionConfiguration.h"
-
-unsigned long lastMillis = 0;
-unsigned long numMessages = 0;
 
 void scan_wifi() {
   int n = WiFi.scanNetworks();
@@ -91,6 +86,7 @@ void setup() {
   scan_wifi();
   connect_wifi(ssid, pass);
   connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
+  Serial.println("IOTC: Connecting client finished");
 
   if (context != NULL) {
     lastTick = 0; // set timer in the past to enable first telemetry asap.
