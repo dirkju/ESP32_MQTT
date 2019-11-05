@@ -3,40 +3,20 @@
 //
 // You can check on your device after a successful
 // connection here: https://shiftr.io/try.
-//
-// by Joël Gähwiler
-// https://github.com/256dpi/arduino-mqtt
 
+// Libraries
 #include <WiFiClientSecure.h>
-#include <MQTT.h>
-#include "ConnectionConfiguration.h"
+#include "src/iotc/common/string_buffer.h"
+#include "src/iotc/iotc.h"
+#include <PubSubClient.h> // PubSubClient http://knolleary.net
+#include <PubSubClientTools.h> // PubSubClientTools dersimn
 
-WiFiClientSecure net;
-MQTTClient client;
+#include "ConnectionConfiguration.h"
 
 unsigned long lastMillis = 0;
 unsigned long numMessages = 0;
 
-void connectWifi() {
-  Serial.print("checking wifi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.print("\nconnecting...");
-  while (!client.connect("arduino", "try", "try")) {
-    Serial.print(".");
-    delay(1000);
-  }
-
-  Serial.println("\nconnected!");
-
-  client.subscribe("/hello");
-  // client.unsubscribe("/hello");
-}
-
-void scanWifi() {
+void scan_wifi() {
   int n = WiFi.scanNetworks();
   if (n == 0) {
       Serial.println("no networks found");
@@ -58,51 +38,93 @@ void scanWifi() {
   Serial.println("");  
 }
 
-void beginWifi(const char ssid[], const char password[]) {
+void connect_wifi(const char ssid[], const char password[]) {
   if(strlen(password) > 0) {
-    Serial.println("Connecting with PSK");
+    Serial.println("Wifi: Using PSK");
     WiFi.begin(ssid, password);
   } else {
-    Serial.println("Connecting without PSK");
+    Serial.println("Wifi: Not using PSK (open Wifi)");
     WiFi.begin(ssid);    
   }
+
+  Serial.print("Wifi: polling for connection");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(1000);
+  }
+  Serial.println("\nWifi: connected!");
 }
 
-void messageReceived(String &topic, String &payload) {
-  numMessages++;
-  Serial.print("incoming: ");
-  Serial.print(numMessages);
-  Serial.println(" " + topic + " - " + payload);
+void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo);
+#include "src/connection.h"
+
+void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
+  // ConnectionStatus
+  if (strcmp(callbackInfo->eventName, "ConnectionStatus") == 0) {
+    LOG_VERBOSE("Is connected ? %s (%d)",
+                callbackInfo->statusCode == IOTC_CONNECTION_OK ? "YES" : "NO",
+                callbackInfo->statusCode);
+    isConnected = callbackInfo->statusCode == IOTC_CONNECTION_OK;
+    return;
+  }
+
+  // payload buffer doesn't have a null ending.
+  // add null ending in another buffer before print
+  AzureIOT::StringBuffer buffer;
+  if (callbackInfo->payloadLength > 0) {
+    buffer.initialize(callbackInfo->payload, callbackInfo->payloadLength);
+  }
+
+  LOG_VERBOSE("- [%s] event was received. Payload => %s\n",
+              callbackInfo->eventName, buffer.getLength() ? *buffer : "EMPTY");
+
+  if (strcmp(callbackInfo->eventName, "Command") == 0) {
+    LOG_VERBOSE("- Command name was => %s\r\n", callbackInfo->tag);
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.print("This devices MAC address is ");
   Serial.println(WiFi.macAddress());
-  scanWifi();
-  beginWifi(ssid, pass);
+  Serial.println("Wifi: Scanning networks");
+  scan_wifi();
+  connect_wifi(ssid, pass);
+  connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
 
-  // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported by Arduino.
-  // You need to set the IP address directly.
-  //
-  // MQTT brokers usually use port 8883 for secure connections.
-  client.begin("broker.shiftr.io", 8883, net);
-  client.onMessage(messageReceived);
-
-  connectWifi();
+  if (context != NULL) {
+    lastTick = 0; // set timer in the past to enable first telemetry asap.
+  }
 }
 
 void loop() {
-  client.loop();
-  delay(10);  // <- fixes some issues with WiFi stability
+  if (isConnected) {
+    unsigned long ms = millis();
+    if (ms - lastTick > 10000) {  // send telemetry every 10 seconds
+      char msg[64] = {0};
+      int pos = 0, errorCode = 0;
 
-  if (!client.connected()) {
-    connectWifi();
-  }
+      lastTick = ms;
+      if (loopId++ % 2 == 0) {  // send telemetry
+        pos = snprintf(msg, sizeof(msg) - 1, "{\"accelerometerX\": %d}",
+                       10 + (rand() % 20));
+        errorCode = iotc_send_telemetry(context, msg, pos);
+      } else {  // send property
+        pos = snprintf(msg, sizeof(msg) - 1, "{\"dieNumber\":%d}",
+                       1 + (rand() % 5));
+        errorCode = iotc_send_property(context, msg, pos);
+      }
+      msg[pos] = 0;
 
-  // publish a message roughly every second.
-  if (millis() - lastMillis > 5000) {
-    lastMillis = millis();
-    client.publish("/hello", "world");
+      if (errorCode != 0) {
+        LOG_ERROR("Sending message has failed with error code %d", errorCode);
+      }
+    }
+
+    iotc_do_work(context);  // do background work for iotc
+  } else {
+    iotc_free_context(context);
+    context = NULL;
+    connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
   }
 }
