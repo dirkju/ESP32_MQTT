@@ -4,8 +4,8 @@
 
 // Libraries
 #include <WiFiClientSecure.h>
-#include <PubSubClient.h> // PubSubClient http://knolleary.net
-#include <PubSubClientTools.h> // PubSubClientTools dersimn
+//#include <PubSubClient.h> // PubSubClient http://knolleary.net
+//#include <PubSubClientTools.h> // PubSubClientTools dersimn
 #include "src/iotc/common/string_buffer.h"
 #include "src/iotc/iotc.h"
 

@@ -305,9 +305,12 @@ int iotc_connect(IOTContext ctx, const char* scope, const char* keyORcert,
 #endif  // AXTLS_DEPRECATED
 #endif  // USES_WIFI101
 
+  IOTC_LOG(F("INFO: TLS Certificate has been set to tlsclient"));
   internal->mqttClient =
-      new PubSubClient(*hostName, AZURE_MQTT_SERVER_PORT, (Client&)internal->tlsClient);
+      new PubSubClient(*hostName, AZURE_MQTT_SERVER_PORT, internal->tlsClient);
+  IOTC_LOG(F("INFO: mqttClient created"));
   internal->mqttClient->setCallback(messageArrived);
+  IOTC_LOG(F("INFO: mqttClient callback set"));
 
   int retry = 0;
   while (retry < 10 && !internal->mqttClient->connected()) {
@@ -317,6 +320,7 @@ int iotc_connect(IOTContext ctx, const char* scope, const char* keyORcert,
     } else {
       WAITMS(2000);
       retry++;
+      IOTC_LOG(F("INFO: mqttClient connection retry"));
     }
   }
 

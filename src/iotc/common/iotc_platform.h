@@ -10,7 +10,7 @@
 
 #include <Arduino.h>
 #include <pgmspace.h>
-#include <PubSubClient.h>
+#include "..\arduino\PubSubClient.h"
 #include "WiFiUdp.h"
 #include "base64.h"
 #include "sha256.h"
