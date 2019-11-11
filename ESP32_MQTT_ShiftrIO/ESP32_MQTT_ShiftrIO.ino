@@ -18,7 +18,7 @@ uint8_t temprature_sens_read();
 #endif
 uint8_t temprature_sens_read();
 
-String device_id = "ESP-02";
+String device_id = "ESP-19";
 const char ssid[] = "MSFTGUEST";
 
 // ESP32 missing this definition, hence here:
@@ -69,6 +69,8 @@ void messageReceived(String &topic, String &payload) {
 
 void setup() {
   Serial.begin(115200);
+  Serial.print("This devices MAC address is ");
+  Serial.println(WiFi.macAddress());
   WiFi.begin(ssid);
   mqttClient.begin("broker.shiftr.io", net);
   mqttClient.onMessage(messageReceived);
